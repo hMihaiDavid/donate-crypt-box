@@ -1,0 +1,23 @@
+{
+  "name": "donate_crypto_frame",
+  "version": "0.0.1",
+  "description": "Simple and trustless crypto donation box for you site, no javascript",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app/index.mjs",
+    "watch": "nodemon"
+  },
+  "author": "Horia Mihai David",
+  "license": "BSD-2-Clause",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "csv": "^6.3.11",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "lodash": "^4.17.21",
+    "qs": "^6.14.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

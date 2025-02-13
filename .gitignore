@@ -1,0 +1,5 @@
+NOTES
+node_modules/
+test/
+db/
+sql.sql
