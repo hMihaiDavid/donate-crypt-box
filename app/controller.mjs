@@ -2,8 +2,8 @@ import assert from 'assert';
 import _ from 'lodash';
 
 import * as db from"./db.mjs";
-import { getRemoteIp } from "./util.mjs";
-import { LEASE_MAX_AGE_SECS, LEASE_SET_SIZE } from './config.mjs';
+import { getRemoteIp, projectRows } from "./util.mjs";
+import { GIVE_FULL_LEASE_SET, LEASE_MAX_AGE_SECS, LEASE_SET_SIZE } from './config.mjs';
 
 // turns [{crypto_symbol: 'XXX', a: A ...}, ...]
 // into  {XXX: [{crypto_symbol: 'XXX', a: A ...}, ...], YYY: ...}
@@ -18,40 +18,50 @@ function foldLeaseSet(leases) {
   return rv;
 }
 
+function leaseSetPickOneForEachCryptoInPlace({ leaseSet }) {
+  assert(typeof(leaseSet) === 'object'); // quick check it is folded.
+  _.forEach(leaseSet, (leases, cryptoSymbol) => {
+    if (leases.length <= 0) { return; } // skip
+
+    const idx = _.random(0, leases.length-1);
+    const picked = leases[idx]; 
+    
+    leaseSet[cryptoSymbol] = [picked];
+  });
+}
+
 export function mw_handle_get_donate(req, res, next) {
   const ip = getRemoteIp(req);
   const userAgent = req.headers['user-agent'] || null;
   
   db.beginTransaction(req);
-  
+
   db.destroyExpiredLeases({ ip });
-  
   let leaseSet = db.getLeases({ ip });
-  if (leaseSet.length > 0) {
+
+  if (leaseSet.length === 0) {
+    // first time call or previous leases expired, get new ones for this ip.
+    const cryptoSymbols = db.getAllCryptoSymbols();
+
+    leaseSet = [];
+    _.forEach(cryptoSymbols, (cryptoSymbol) => {
+      const newLeasesForSymbol = db.getFreshLeases({ limit: LEASE_SET_SIZE, cryptoSymbol });
+      db.insertLeases({ cryptoSymbol, ip, userAgent, leases: newLeasesForSymbol });
+      leaseSet.push(newLeasesForSymbol);
+    });
     db.commitTransaction(req);
-    res.data.leaseSet = foldLeaseSet(leaseSet);
-    return next();
+
+    leaseSet = _.flatten(leaseSet);
+  } else {
+    db.commitTransaction(req);
+  }
+  
+  leaseSet = foldLeaseSet(projectRows(leaseSet, ['address', 'crypto_symbol']));
+
+  if (!GIVE_FULL_LEASE_SET) {
+    leaseSetPickOneForEachCryptoInPlace({ leaseSet, ip, userAgent });
   }
 
-  // first time call or previous leases expired, get new ones for this ip.
-
-  const cryptoSymbols = db.getAllCryptoSymbols();
-
-  leaseSet = {};
-  _.forEach(cryptoSymbols, (cryptoSymbol) => {
-    const newLeasesForSymbol = db.getFreshLeases({ limit: LEASE_SET_SIZE, cryptoSymbol });
-    db.insertLeases({ cryptoSymbol, ip, userAgent, leases: newLeasesForSymbol });
-    _.forEach(newLeasesForSymbol, (lease) => {
-      assert(lease.crypto_symbol === cryptoSymbol);
-      leaseSet[cryptoSymbol] = leaseSet[cryptoSymbol] || [];
-      leaseSet[cryptoSymbol].push(lease);
-    });
-  });
-
-  db.commitTransaction(req);
-
-  // TODO pick only 1 (or CONFIG.NUM_GIVEN_ADDRESSES) for each cryptoSymbol of the leaseSet.
-  
   res.data.leaseSet = leaseSet;
   next();
 }

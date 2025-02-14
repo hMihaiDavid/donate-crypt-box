@@ -49,3 +49,11 @@ export function mw_err_rollback_active_transaction(err, req, res, next) {
 export function getRemoteIp(req) {
   return String(req.connection?.remoteAddress || req.socket?.remoteAddress);
 }
+
+// returns a new object with only the selected fields,
+// ex. projectObject({a: 1, b: 2, c: 3}, ['a', 'b']) ==> {a: 1, b: 2}
+export const projectObject = (obj, fields) => _.pick(obj, fields);
+
+// returns a new array of objects (aka rows) with only the selected fields in the objects.
+// ex. projectRows([{a:1, b:2}, {a:3, c:4}], ['a']) ==> [{a:1}, {a:3}]
+export const projectRows = (rows, fields) => _.map(rows, (row) => projectObject(row, fields));

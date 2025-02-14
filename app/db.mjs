@@ -153,7 +153,6 @@ export function getFreshLeases({ limit = 1, cryptoSymbol }) {
     return _.concat(freshLeases, dirtyLeases);
 }
 
-// TODO do a soft delete instead, in order to retain state of which addresses have been given.
 export function destroyExpiredLeases({ ip, maxAgeSecs = LEASE_MAX_AGE_SECS } = {}) {
   assert(_.isInteger(maxAgeSecs) && maxAgeSecs >= 0);
   
