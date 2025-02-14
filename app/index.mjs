@@ -36,6 +36,14 @@ app.get('/donate',
   mw_err_rollback_active_transaction,
   mkmw_err_render_view_or_json('donate'));
 
+// TODO REMOVE ME
+// app.get('/test_destroy_all_leases',
+//   (req, res) => {
+//     let rv = db.destroyExpiredLeases({maxAgeSecs: 5 });
+//     res.send('done, with maxAgeSecs 5, rv = '+JSON.stringify(rv));
+//   }
+// )
+
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).send("Internal Server Error.");
@@ -44,7 +52,7 @@ app.use((err, req, res, next) => {
 // serve static folder.
 app.use(express.static('static'))
 
-await db.init();
+db.init();
 
 app.listen(port, '0.0.0.0', () => {
   console.log(`app listening on port ${port}`)

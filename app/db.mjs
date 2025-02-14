@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import assert from 'assert';
 import _ from 'lodash';
+import { LEASE_MAX_AGE_SECS } from './config.mjs';
 
 let sqlite = null;
 
@@ -46,33 +47,30 @@ export function init() {
     CREATE TABLE IF NOT EXISTS "leases" (
       "pool_rowid" INTEGER NOT NULL,
       "ip" TEXT NOT NULL,
-      "xff_ip" TEXT,
       "user_agent" TEXT,
       "leased_at_datetime_utc" TEXT NOT NULL,
       "j"	TEXT NOT NULL DEFAULT '{}'
-    );
-    `;
+    );`;
+
+    // TODO
+    // INDICES AND FOREIGN KEY CONSTRAINTS.
     return sqlite.exec(q);
 }
 
-// TODO change name to getLeasesForIp and do group by having and order_by_random() to pick just one from each coin 
-// TODO after so much random() queries might be slow, defer them to thread pool.
-export function getAllLeaseSetsForIp({ip, limit = 1}) {
-    assert(limit >= 1);
+export function getLeases({ ip }) {
+    assert(typeof(ip) === 'string' && ip.trim().length > 0);
     let q = `
     SELECT
-      p.crypto_symbol, p.address
+      p.rowid AS pool_rowid, p.crypto_symbol, p.address
     FROM
       leases l
     INNER JOIN
       pool p ON p.rowid = l.pool_rowid
     WHERE
       l.ip = @ip
-    LIMIT @limit
-    ;
-    `;
+    ;`;
 
-    return sqlite.prepare(q).all({ ip, limit });
+    return sqlite.prepare(q).all({ ip });
 }
 
 export function getAllCryptoSymbols() {
@@ -81,20 +79,18 @@ export function getAllCryptoSymbols() {
       p.crypto_symbol
     FROM
       pool p
-    ;
-    `;
+    ;`;
 
     return sqlite.prepare(q).pluck().all();
 }
 
-export function getNewLeaseSet({ limit = 1, cryptoSymbol }) {
+export function getFreshLeases({ limit = 1, cryptoSymbol }) {
     assert(limit >= 1);
-    assert(typeof(cryptoSymbol) === 'string');
+    assert(typeof(cryptoSymbol) === 'string' && cryptoSymbol.trim().length > 0);
 
-    
     let q = `
     SELECT
-      p.crypto_symbol, p.address, 1 as fresh
+      p.rowid as pool_rowid, p.crypto_symbol, p.address, 1 as fresh
     FROM
       pool p
     WHERE
@@ -108,14 +104,12 @@ export function getNewLeaseSet({ limit = 1, cryptoSymbol }) {
       )
     ORDER BY RANDOM()
     LIMIT @limit
-    ;
-    `;
+    ;`;
 
-    // TODO optimize the order by rand() here and below.
+    // TODO optimize the order by rand().
     // see https://stackoverflow.com/a/24591696/3537530
 
     const freshLeases = sqlite.prepare(q).all({ limit, cryptoSymbol });
-    console.log('freshLeases', freshLeases);
     if (freshLeases.length >= limit) { return freshLeases; }
     //limit = limit + 3;
     
@@ -123,7 +117,7 @@ export function getNewLeaseSet({ limit = 1, cryptoSymbol }) {
     // ask for reused leases, then merge with previous ones.
     q = `
     SELECT
-      p.crypto_symbol, p.address, 0 as fresh
+      p.rowid as pool_rowid, p.crypto_symbol, p.address, 0 as fresh
     FROM
       pool p
     WHERE
@@ -137,13 +131,55 @@ export function getNewLeaseSet({ limit = 1, cryptoSymbol }) {
       )
     ORDER BY RANDOM()
     LIMIT @limit
-    ;
-    `;
+    ;`;
 
     const dirtyLeases = sqlite.prepare(q).all({ limit: limit - freshLeases.length, cryptoSymbol });
-    console.log('dirtyLeases', dirtyLeases);
 
     // merge results
     return _.concat(freshLeases, dirtyLeases);
-    
+}
+
+// TODO do a soft delete instead, in order to retain state of which addresses have been given.
+export function destroyExpiredLeases({ ip, maxAgeSecs = LEASE_MAX_AGE_SECS } = {}) {
+  assert(_.isInteger(maxAgeSecs) && maxAgeSecs >= 0);
+  
+  let qIp = '';
+  const bindParams = {};
+  if (ip !== undefined) {
+    assert(typeof(ip) === 'string' && ip.trim().length > 0);
+    qIp += ' AND l.ip = @ip';
+    bindParams.ip = ip;
+  }
+
+  // TODO USE A GENERATED COLUMN FOR UNIX EPOCH
+  // https://www.sqlite.org/gencol.html
+  let q = `
+  DELETE FROM leases AS l
+  WHERE
+    unixepoch('now') - unixepoch((SELECT ll.leased_at_datetime_utc FROM leases AS ll WHERE ll.rowid = l.rowid )) > @maxAgeSecs
+  ${qIp}
+  ;`;
+  bindParams.maxAgeSecs = maxAgeSecs;
+
+  return sqlite.prepare(q).run(bindParams);
+}
+
+export function insertLeases({ cryptoSymbol, ip, userAgent, leases }) {
+  assert(typeof(cryptoSymbol) === 'string' && cryptoSymbol.trim().length > 0);
+  assert(typeof(ip) === 'string' && ip.trim().length > 0);
+  assert(userAgent === undefined || (typeof(userAgent) === 'string' && userAgent.trim().length > 0));
+  
+  let q = `
+  INSERT INTO leases (pool_rowid, ip, user_agent, leased_at_datetime_utc)
+  VALUES (?, ?, ?, datetime('now'))
+  ;`;
+  const query = sqlite.prepare(q);
+  
+  // TODO PUT A FOREIGN KEY CONSTRAINT WHEN CREATING TABLE
+  const rv = [];
+  _.forEach(leases, (lease) => {
+    rv.push(query.run([lease.pool_rowid, ip, userAgent || null]));
+  });
+
+  return rv;
 }
