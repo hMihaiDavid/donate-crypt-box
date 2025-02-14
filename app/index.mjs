@@ -1,15 +1,9 @@
 import express from 'express';
 
 import { mw_handle_get_donate } from './controller.mjs';
-import { mkmw_render_view_or_json, mkmw_err_render_view_or_json, mw_rollback_active_transaction, mw_err_rollback_active_transaction } from './util.mjs';
+import { mkmw_render_view_or_json, mkmw_err_render_view_or_json, mw_rollback_active_transaction,
+         mw_err_rollback_active_transaction, mkmw_start_time_measure, mkmw_end_time_measure } from './util.mjs';
 import * as db from './db.mjs';
-
-// TODO ratelimit and max request size and bodyparser qs parser limits...
-// and cors and init db and parse config from db and parse env for port/iface
-
-//const qs_opts = {}
-//app.set('query parser', (str) => qs.parse(str, qs_opts));
-
 
 // MAIN
 
@@ -24,12 +18,14 @@ app.use((req, res, next) => { res.data = {};    next(); });
 
 app.get('/donate',
   // normal path starts here.
+  mkmw_start_time_measure('req.session.startMillis'),
   mw_handle_get_donate,
 
   // test jumping to error path...
   //(req, res) => {throw "Test normal error middleware."},
   //(req, res) => {throw new Error("Test internal server error middleware.")},
   mw_rollback_active_transaction,
+  mkmw_end_time_measure('req.session.startMillis', 'res.data.ellapsedMillis'),
   mkmw_render_view_or_json('donate'),
 
   // error path jumps here.

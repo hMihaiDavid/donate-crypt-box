@@ -46,6 +46,21 @@ export function mw_err_rollback_active_transaction(err, req, res, next) {
   next(err);
 }
 
+export function mkmw_start_time_measure(pathStart) {
+  return (req, res, next) => {
+    _.set({ req, res }, pathStart, Date.now());
+    next();
+  }
+}
+
+export function mkmw_end_time_measure(pathStart, pathEllapsed) {
+  return (req, res, next) => {
+    _.set({ req, res }, pathEllapsed, Date.now() - _.get({ req, res }, pathStart));
+    next();
+  }
+}
+
+
 export function getRemoteIp(req) {
   return String(req.connection?.remoteAddress || req.socket?.remoteAddress);
 }
