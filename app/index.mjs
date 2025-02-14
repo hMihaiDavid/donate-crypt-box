@@ -37,12 +37,12 @@ app.get('/donate',
   mkmw_err_render_view_or_json('donate'));
 
 // TODO REMOVE ME
-// app.get('/test_destroy_all_leases',
-//   (req, res) => {
-//     let rv = db.destroyExpiredLeases({maxAgeSecs: 5 });
-//     res.send('done, with maxAgeSecs 5, rv = '+JSON.stringify(rv));
-//   }
-// )
+app.get('/test_destroy_all_leases',
+  (req, res) => {
+    let rv = db.destroyExpiredLeases({maxAgeSecs: 1 });
+    res.send('done, with maxAgeSecs 1, rv = '+JSON.stringify(rv));
+  }
+)
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -53,6 +53,9 @@ app.use((err, req, res, next) => {
 app.use(express.static('static'))
 
 db.init();
+
+if (process.argv.includes('--exit'))
+  process.exit(0);
 
 app.listen(port, '0.0.0.0', () => {
   console.log(`app listening on port ${port}`)

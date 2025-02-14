@@ -39,7 +39,9 @@ export function init() {
       "crypto_symbol" TEXT NOT NULL,
       "bip32_path" TEXT,
       "address"	TEXT NOT NULL,
-      "inserted_at_datetime_utc" TEXT NOT NULL,
+      "inserted_at" TEXT NOT NULL,
+      "soft_deleted" INTEGER NOT NULL DEFAULT 0,
+      "last_deleted_at" TEXT,
       "from" TEXT,
       "j"	TEXT NOT NULL DEFAULT '{}',
       UNIQUE("crypto_symbol", "address")
@@ -48,7 +50,9 @@ export function init() {
       "pool_rowid" INTEGER NOT NULL,
       "ip" TEXT NOT NULL,
       "user_agent" TEXT,
-      "leased_at_datetime_utc" TEXT NOT NULL,
+      "leased_at" TEXT NOT NULL,
+      "soft_deleted" INTEGER NOT NULL DEFAULT 0,
+      "last_deleted_at" TEXT,
       "j"	TEXT NOT NULL DEFAULT '{}'
     );`;
 
@@ -67,6 +71,10 @@ export function getLeases({ ip }) {
     INNER JOIN
       pool p ON p.rowid = l.pool_rowid
     WHERE
+      p.soft_deleted = 0
+    AND
+      l.soft_deleted = 0
+    AND
       l.ip = @ip
     ;`;
 
@@ -79,6 +87,8 @@ export function getAllCryptoSymbols() {
       p.crypto_symbol
     FROM
       pool p
+    WHERE
+      p.soft_deleted = 0
     ;`;
 
     return sqlite.prepare(q).pluck().all();
@@ -94,6 +104,8 @@ export function getFreshLeases({ limit = 1, cryptoSymbol }) {
     FROM
       pool p
     WHERE
+      p.soft_deleted = 0
+    AND
       p.crypto_symbol = @cryptoSymbol
     AND
       p.rowid NOT IN (
@@ -121,6 +133,8 @@ export function getFreshLeases({ limit = 1, cryptoSymbol }) {
     FROM
       pool p
     WHERE
+      p.soft_deleted = 0
+    AND
       p.crypto_symbol = @cryptoSymbol
     AND
       p.rowid IN (
@@ -147,16 +161,23 @@ export function destroyExpiredLeases({ ip, maxAgeSecs = LEASE_MAX_AGE_SECS } = {
   const bindParams = {};
   if (ip !== undefined) {
     assert(typeof(ip) === 'string' && ip.trim().length > 0);
-    qIp += ' AND l.ip = @ip';
+    qIp += ' AND ip = @ip';
     bindParams.ip = ip;
   }
 
   // TODO USE A GENERATED COLUMN FOR UNIX EPOCH
   // https://www.sqlite.org/gencol.html
   let q = `
-  DELETE FROM leases AS l
+  UPDATE leases
+  SET
+    soft_deleted = 1,
+    last_deleted_at = datetime('now')
   WHERE
-    unixepoch('now') - unixepoch((SELECT ll.leased_at_datetime_utc FROM leases AS ll WHERE ll.rowid = l.rowid )) > @maxAgeSecs
+    unixepoch('now') - unixepoch((
+                        SELECT ll.leased_at
+                        FROM   leases AS ll
+                        WHERE  ll.soft_deleted = 0
+                        AND    ll.rowid = rowid )) > @maxAgeSecs
   ${qIp}
   ;`;
   bindParams.maxAgeSecs = maxAgeSecs;
@@ -170,7 +191,7 @@ export function insertLeases({ cryptoSymbol, ip, userAgent, leases }) {
   assert(userAgent === undefined || (typeof(userAgent) === 'string' && userAgent.trim().length > 0));
   
   let q = `
-  INSERT INTO leases (pool_rowid, ip, user_agent, leased_at_datetime_utc)
+  INSERT INTO leases (pool_rowid, ip, user_agent, leased_at)
   VALUES (?, ?, ?, datetime('now'))
   ;`;
   const query = sqlite.prepare(q);
