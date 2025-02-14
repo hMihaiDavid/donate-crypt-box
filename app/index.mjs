@@ -24,21 +24,22 @@ app.get('/donate',
   // test jumping to error path...
   //(req, res) => {throw "Test normal error middleware."},
   //(req, res) => {throw new Error("Test internal server error middleware.")},
+
   mw_rollback_active_transaction,
   mkmw_end_time_measure('req.session.startMillis', 'res.data.ellapsedMillis'),
   mkmw_render_view_or_json('donate'),
 
-  // error path jumps here.
+  // error path starts here.
   mw_err_rollback_active_transaction,
   mkmw_err_render_view_or_json('donate'));
 
 // TODO REMOVE ME
-app.get('/test_destroy_all_leases',
-  (req, res) => {
-    let rv = db.destroyExpiredLeases({maxAgeSecs: 1 });
-    res.send('done, with maxAgeSecs 1, rv = '+JSON.stringify(rv));
-  }
-)
+// app.get('/test_destroy_all_leases',
+//   (req, res) => {
+//     let rv = db.destroyExpiredLeases({maxAgeSecs: 1 });
+//     res.send('done, with maxAgeSecs 1, rv = '+JSON.stringify(rv));
+//   }
+// )
 
 app.use((err, req, res, next) => {
   console.error(err);
