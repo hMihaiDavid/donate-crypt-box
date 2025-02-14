@@ -2,8 +2,8 @@ import assert from 'assert';
 import _ from 'lodash';
 
 import * as db from"./db.mjs";
-import { getRemoteIp, projectRows } from "./util.mjs";
-import { GIVE_FULL_LEASE_SET, LEASE_MAX_AGE_SECS, LEASE_SET_SIZE } from './config.mjs';
+import { getRemoteIp, hashCode, projectRows } from "./util.mjs";
+import { GIVE_FULL_LEASE_SET, LEASE_MAX_AGE_SECS, LEASE_SET_SIZE, MAX_AGE_SECS } from './config.mjs';
 
 // turns [{crypto_symbol: 'XXX', a: A ...}, ...]
 // into  {XXX: [{crypto_symbol: 'XXX', a: A ...}, ...], YYY: ...}
@@ -18,14 +18,17 @@ function foldLeaseSet(leases) {
   return rv;
 }
 
-function leaseSetPickOneForEachCryptoInPlace({ leaseSet }) {
+function leaseSetPickOneInPlace({ leaseSet, ip, userAgent }) {
   assert(typeof(leaseSet) === 'object'); // quick check it is folded.
   _.forEach(leaseSet, (leases, cryptoSymbol) => {
     if (leases.length <= 0) { return; } // skip
 
-    const idx = _.random(0, leases.length-1);
+    const timeKey = Math.floor(Date.now()/(1000*(MAX_AGE_SECS||1)));
+    const key = `salty123_${cryptoSymbol||''}_${ip||''}_${userAgent||''}_${timeKey}_`;
+    const idx = hashCode(key) % leases.length;
+
     const picked = leases[idx]; 
-    
+
     leaseSet[cryptoSymbol] = [picked];
   });
 }
@@ -59,7 +62,7 @@ export function mw_handle_get_donate(req, res, next) {
   leaseSet = foldLeaseSet(projectRows(leaseSet, ['address', 'crypto_symbol']));
 
   if (!GIVE_FULL_LEASE_SET) {
-    leaseSetPickOneForEachCryptoInPlace({ leaseSet, ip, userAgent });
+    leaseSetPickOneInPlace({ leaseSet, ip, userAgent });
   }
 
   res.data.leaseSet = leaseSet;

@@ -35,14 +35,14 @@ console.log(process.argv);
 runSync('BEGIN TRANSACTION;');
 //run('DROP TABLE *;'); // XXX for testing.
 
-fs.createReadStream('test/btc.csv').pipe(parse({delimiter: ',', from_line: 2}))
+fs.createReadStream('test/btct.big.csv').pipe(parse({delimiter: ',', from_line: 2}))
 .on('data', function(csv_row) {
   let q = `
     INSERT INTO "pool" ("crypto_symbol", "bip32_path", "address", "from", "inserted_at") VALUES (
       ?, ?, ?, ?, datetime());
   `;
 
-  runSync(q, ['BTC', csv_row[0], csv_row[1], "wallet1"]);
+  runSync(q, ['BTCT', csv_row[0], csv_row[1], "test/test_wallet_1.txt:BTCT"]);
 })
 //.on('error', function(error) { console.log(error.message); })
 .on('finish', function() {

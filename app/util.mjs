@@ -60,7 +60,6 @@ export function mkmw_end_time_measure(pathStart, pathEllapsed) {
   }
 }
 
-
 export function getRemoteIp(req) {
   return String(req.connection?.remoteAddress || req.socket?.remoteAddress);
 }
@@ -72,3 +71,11 @@ export const projectObject = (obj, fields) => _.pick(obj, fields);
 // returns a new array of objects (aka rows) with only the selected fields in the objects.
 // ex. projectRows([{a:1, b:2}, {a:3, c:4}], ['a']) ==> [{a:1}, {a:3}]
 export const projectRows = (rows, fields) => _.map(rows, (row) => projectObject(row, fields));
+
+// https://gist.github.com/hyamamoto/fd435505d29ebfa3d9716fd2be8d42f0
+// Small mod: add Math.abs
+export function hashCode(s) {
+  for(var i = 0, h = 0; i < s.length; i++)
+      h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  return Math.abs(h);
+}
