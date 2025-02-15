@@ -61,24 +61,46 @@ export function init() {
     return sqlite.exec(q);
 }
 
-export function getLeases({ ip }) {
-    assert(typeof(ip) === 'string' && ip.trim().length > 0);
+export function getLeases({ filter: { ip }, limit, offset, count = false, showDeleted = false } = {}) {
+    if (ip) assert(typeof(ip) === 'string' && ip.trim().length > 0);
+  
+    const bindParams = {};
+
+    // XXX refactor 
+    let qIp = '';
+    if (ip) {
+      qIp += ' AND l.ip = @ip';
+      bindParams.ip = ip;
+    }
+
+    let qLimit = '';
+    if (limit) { qLimit += ` LIMIT ${limit} ` }
+
+    let qOffset = '';
+    if (offset) { qOffset += ` OFFSET ${offset} ` }
+  
+    const buildSelectCols = (tableAlias, pathPrefix, columnNames) =>
+      columnNames.map((colName) => ` ${tableAlias}."${colName}" AS '${pathPrefix}${colName}' `).join();
+
     let q = `
     SELECT
-      p.rowid AS pool_rowid, p.crypto_symbol, p.address
+      ${count ? 'COUNT(*)' :
+     `${buildSelectCols('p', 'pool_rowid.',
+        ['crypto_symbol', 'bip32_path', 'address', 'inserted_at', 'soft_deleted', 'last_deleted_at', 'from'])},
+      ${buildSelectCols('l', '',
+        ['pool_rowid', 'ip', 'user_agent', 'leased_at', 'soft_deleted', 'last_deleted_at'])}`}
     FROM
       leases l
     INNER JOIN
       pool p ON p.rowid = l.pool_rowid
     WHERE
-      p.soft_deleted = 0
+      ${ showDeleted ? '1=1' : 'p.soft_deleted = 0' }
     AND
-      l.soft_deleted = 0
-    AND
-      l.ip = @ip
+      ${ showDeleted ? '1=1' : 'l.soft_deleted = 0' }
+    ${qIp} ${qLimit} ${qOffset}
     ;`;
 
-    return sqlite.prepare(q).all({ ip });
+    return sqlite.prepare(q).pluck(count).all(bindParams);
 }
 
 export function getAllCryptoSymbols() {
@@ -120,7 +142,6 @@ export function getFreshLeases({ limit = 1, cryptoSymbol }) {
 
     const freshLeases = sqlite.prepare(q).all({ limit, cryptoSymbol });
     if (freshLeases.length >= limit) { return freshLeases; }
-    //limit = limit + 3;
     
     // not enough fresh (ie. unleased) addresses in db, need to reuse.
     // ask for reused leases, then merge with previous ones.
