@@ -1,4 +1,6 @@
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
+import { slowDown } from 'express-slow-down'
 
 import { mw_handle_get_donate } from './controller.mjs';
 import { mkmw_render_view_or_json, mkmw_err_render_view_or_json, mw_rollback_active_transaction,
@@ -12,6 +14,9 @@ const port = process.env.port || 8080;
 
 app.set('views', 'app/views');
 app.set('view engine', 'ejs')
+
+app.use(rateLimit({ windowMs: 10 * 60 * 1000, limit: 2000, standardHeaders: 'draft-8', legacyHeaders: false }));
+app.use(slowDown({  windowMs: 5  * 60 * 1000, delayAfter: 100, delayMs: (hits) => hits * 100, }));
 
 app.use((req, res, next) => { req.session = {}; next(); });
 app.use((req, res, next) => { res.data = {};    next(); });
