@@ -2,8 +2,8 @@ import assert from 'assert';
 import _ from 'lodash';
 
 export const DEFAULT_LEASE_MAX_AGE_SECS = 3 * 24 * 3600;
-export const DEFAULT_MAX_AGE_SECS = 60;
-export const DEFAULT_LEASE_SET_SIZE = 5;
+export const DEFAULT_MAX_AGE_SECS = 3 * 60;
+export const DEFAULT_LEASE_SET_SIZE = 3;
 export const DEFAULT_GIVE_FULL_LEASE_SET = false;
 
 const leaseMaxAgeSecs = Number(process.env.LEASE_MAX_AGE_SECS) || DEFAULT_LEASE_MAX_AGE_SECS;
