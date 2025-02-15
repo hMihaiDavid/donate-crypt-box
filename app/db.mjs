@@ -114,12 +114,9 @@ export function getFreshLeases({ limit = 1, cryptoSymbol }) {
         FROM
           leases l
       )
-    ORDER BY RANDOM()
+    ORDER BY p.rowid ASC
     LIMIT @limit
     ;`;
-
-    // TODO optimize the order by rand().
-    // see https://stackoverflow.com/a/24591696/3537530
 
     const freshLeases = sqlite.prepare(q).all({ limit, cryptoSymbol });
     if (freshLeases.length >= limit) { return freshLeases; }
@@ -143,7 +140,7 @@ export function getFreshLeases({ limit = 1, cryptoSymbol }) {
         FROM
           leases l
       )
-    ORDER BY RANDOM()
+    ORDER BY p.rowid ASC
     LIMIT @limit
     ;`;
 
